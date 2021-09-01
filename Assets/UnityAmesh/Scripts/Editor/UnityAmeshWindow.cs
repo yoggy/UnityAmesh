@@ -29,10 +29,13 @@ public class UnityAmeshWindow : EditorWindow
     {
         CheckInit(); // プロジェクトを開いたときに、ウインドウ状態が復元していきなりウインドウが開く場合の対策
         InitAmesh();
+
+        EditorApplication.update += CheckAutoReload;
     }
 
     void OnDisable()
     {
+        EditorApplication.update -= CheckAutoReload;
     }
 
     void OnDestroy()
@@ -44,9 +47,14 @@ public class UnityAmeshWindow : EditorWindow
         float window_w = position.size.x;
         float window_h = position.size.y;
 
-        if (GUILayout.Button("Reload", GUILayout.Width(120)))
+        EditorGUILayout.BeginHorizontal();
         {
-            ReloadAmesh();
+            if (GUILayout.Button("Reload", GUILayout.Width(120)))
+            {
+                ReloadAmesh();
+            }
+            EditorGUILayout.Space(20);
+            GUILayout.Label($"{gifFilename}");
         }
 
         float h = (_resultTexture.height / (float)_resultTexture.width) * window_w;
@@ -61,9 +69,22 @@ public class UnityAmeshWindow : EditorWindow
     Texture2D _ameshTexture;
     Texture2D _resultTexture;
 
+    string gifFilename = "";
+    DateTime lastUpdateTime = DateTime.Now;
+
     void InitAmesh()
     {
         DownloadBaseMap();
+    }
+
+    void CheckAutoReload()
+    {
+        var diff = DateTime.Now - lastUpdateTime;
+        if (diff.TotalMinutes >= 3)
+        {
+            lastUpdateTime = DateTime.Now;
+            ReloadAmesh();
+        }
     }
 
     void ReloadAmesh()
@@ -128,11 +149,19 @@ public class UnityAmeshWindow : EditorWindow
     void DownloadAmesh()
     {
         var base_url = "https://tokyo-ame.jwa.or.jp/mesh/000/";
-        var yyyyMMddhh_str = DateTime.Now.ToString("yyyyMMddHH");
-        var m = (int)DateTime.Now.Minute / (int)5;
-        m = m > 0 ? m - 1 : 0;
-        var mm_str = string.Format("{0:D2}", m * 5);
-        var url = base_url + yyyyMMddhh_str + mm_str + ".gif"; // yyyyMMddHHmm.gif (mmは5分でquantizeされた数値)
+
+        lastUpdateTime = DateTime.Now;
+
+        var t = lastUpdateTime.AddMinutes(-1); // 1分前の時刻を使用(ちょうどの時刻にはgifファイルはまだ存在しない…)
+
+        var m = (int)t.Minute;
+        var q = ((int)m / (int)5) * 5; // 5分でquantizeされた数値
+
+        var yyyyMMddhh_str = t.ToString("yyyyMMddHH");
+        var qq_str = string.Format("{0:D2}", q);
+
+        gifFilename = yyyyMMddhh_str + qq_str + ".gif"; // yyyyMMddHHmm.gif
+        var url = base_url + gifFilename;
 
         _req = UnityWebRequest.Get(url);
         _req.SendWebRequest();
